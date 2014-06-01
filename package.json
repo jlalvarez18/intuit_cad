@@ -1,0 +1,27 @@
+{
+  "name": "Intuit-Customer-Data-API",
+  "version": "0.0.0",
+  "description": "Node.js module for interacting with Intuit's Customer Account Data API",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jlalvarez18/intuit_cad.git"
+  },
+  "author": "Juan Alvarez",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jlalvarez18/intuit_cad/issues"
+  },
+  "homepage": "https://github.com/jlalvarez18/intuit_cad",
+  "dependencies": {
+    "crypto": "0.0.3",
+    "moment": "^2.6.0",
+    "node-uuid": "^1.4.1",
+    "oauth-1.0a": "^0.1.1",
+    "querystring": "^0.2.0",
+    "restify": "^2.8.1"
+  }
+}
