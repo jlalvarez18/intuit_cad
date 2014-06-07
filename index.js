@@ -6,15 +6,27 @@ var querystring = require('querystring');
 var crypto = require('crypto');
 var https = require('https');
 var OAuth = require('oauth-1.0a');
+var path = require('path');
 
 var baseUrl = 'financialdatafeed.platform.intuit.com'
 
 function CAD() {}
 
-function _initialize(oauthConsumerKey, oauthSecretKey, providerId) {
+// NEED TO CHANGE THIS TO PASS A DICTIONARY TO INCLUDE
+// OAUTH KEYS AND PATH TO CERTIFICATES
+function _initialize(values) {
+	var oauthConsumerKey = values['consumer_key'];
+	var oauthSecretKey = values['secret_key'];
+	var providerId = values['provider_id'];
+	
+	var certPath = values['certificate_path'];
+	var privPath = values['private_key_path'];
+	
 	this._consumerKey = oauthConsumerKey;
 	this._consumerSecretKey = oauthSecretKey;
 	this._providerId = providerId;
+	this._certificatePath = certPath;
+	this._privateKeyPath = privPath;
 	
 	this._oauthToken = '';
 	this._oauthTokenSecret = '';
@@ -212,8 +224,7 @@ function _areOAuthKeysExpired() {
 function _prepSAMLAssertion(customerId, providerId) {
 	var dateFormat = "YYYY-MM-DD'T'HH:mm:ss.SSS'Z'";
 	
-	var keysPath = './keys';
-	var xmlPath = './keys';
+	var xmlPath = path.join(__dirname, 'saml_xml');
 	
 	var now = moment.utc();
 	var nowString = now.toISOString()//.format(dateFormat);
@@ -222,11 +233,11 @@ function _prepSAMLAssertion(customerId, providerId) {
 	var now15MinString = now15Min.toISOString()//.format(dateFormat);
 	
 	var refId = UUID.v1();
-	var x509 = fs.readFileSync(keysPath + '/app.crt', 'utf8');
-	var privKey = fs.readFileSync(keysPath + '/app.key', 'utf8');
+	var x509 = fs.readFileSync(cad._certificatePath, 'utf8');
+	var privKey = fs.readFileSync(cad._privateKeyPath, 'utf8');
 	
 	// Create ASSERTION	
-	var assertion = fs.readFileSync('./keys/assertion.xml', 'utf8');
+	var assertion = fs.readFileSync(path.join(xmlPath, 'assertion.xml'), 'utf8');
 	
 	function replaceAll(find, replace, str) {
 		var find = find.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
@@ -246,7 +257,7 @@ function _prepSAMLAssertion(customerId, providerId) {
 	var assertionDigest = SHAHash.digest('base64');
 	
 	// Create SIGNED INFO
-	var signedInfo = fs.readFileSync(xmlPath + '/signed_info.xml', 'utf8');
+	var signedInfo = fs.readFileSync(path.join(xmlPath, 'signed_info.xml'), 'utf8');
 	
 	signedInfo = replaceAll('REFERENCE_ID', refId, signedInfo);
 	signedInfo = replaceAll('DIGEST', assertionDigest, signedInfo);
@@ -257,7 +268,7 @@ function _prepSAMLAssertion(customerId, providerId) {
 	var signatureValue = SIGN.sign(privKey, 'base64');
 	
 	// Create SIGNATURE
-	var signature = fs.readFileSync(xmlPath + '/signature.xml', 'utf8');
+	var signature = fs.readFileSync(path.join(xmlPath, 'signature.xml'), 'utf8');
 	
 	signature = replaceAll('REFERENCE_ID', refId, signature);
 	signature = replaceAll('DIGEST', assertionDigest, signature);

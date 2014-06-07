@@ -1,5 +1,5 @@
 {
-  "name": "Intuit-Customer-Data-API",
+  "name": "intuit-cad-api",
   "version": "0.0.0",
   "description": "Node.js module for interacting with Intuit's Customer Account Data API",
   "main": "index.js",
