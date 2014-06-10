@@ -32,66 +32,64 @@ function _getConsumerKeys() {
 }
 
 function _getOAuthTokens(customerId, callback) {
-	if (customerId == null) {
-		callback('Customer ID required', null)
-	} else {
-		var assertion = _prepSAMLAssertion(customerId, cad._providerId);
+	customerId = customerId || 'default';
+	
+	var assertion = _prepSAMLAssertion(customerId, cad._providerId);
 
-		var query = { saml_assertion: assertion };
-		var body = querystring.stringify(query);
+	var query = { saml_assertion: assertion };
+	var body = querystring.stringify(query);
 
-		var options = {
-			host: 'oauth.intuit.com',
-			path: '/oauth/v1/get_access_token_by_saml',
-			method: 'POST',
-			headers: { 
-				'Authorization': 'OAuth oauth_consumer_key=' + '"' + cad._consumerKey + '"',
-				'Content-Type': 'application/x-www-form-urlencoded',
-				'Content-Length': body.length
+	var options = {
+		host: 'oauth.intuit.com',
+		path: '/oauth/v1/get_access_token_by_saml',
+		method: 'POST',
+		headers: { 
+			'Authorization': 'OAuth oauth_consumer_key=' + '"' + cad._consumerKey + '"',
+			'Content-Type': 'application/x-www-form-urlencoded',
+			'Content-Length': body.length
+		}
+	};
+
+	var req = https.request(options, function(res) {
+		// console.log('STATUS: ' + res.statusCode);
+		// console.log('HEADERS: ' + JSON.stringify(res.headers));
+
+		var str = '';
+
+		res.on('data', function(chunk) {
+			str += chunk;
+		});
+
+		res.on('end', function() {
+			var cleanString = querystring.unescape(str);
+	
+			var result = querystring.parse(str);
+	
+			var oauth_problem = result['oauth_problem'];
+	
+			if (oauth_problem != null) {
+				callback(oauth_problem, null);
+			} else {
+				result['oauth_exp_date'] = moment().add('hours', 1);
+				
+				callback(null, result);
 			}
-		};
-
-		var req = https.request(options, function(res) {
-			// console.log('STATUS: ' + res.statusCode);
-			// console.log('HEADERS: ' + JSON.stringify(res.headers));
-	
-			var str = '';
-	
-			res.on('data', function(chunk) {
-				str += chunk;
-			});
-	
-			res.on('end', function() {
-				var cleanString = querystring.unescape(str);
-		
-				var result = querystring.parse(str);
-		
-				var oauth_problem = result['oauth_problem'];
-		
-				if (oauth_problem != null) {
-					callback(oauth_problem, null);
-				} else {
-					result['oauth_exp_date'] = moment().add('hours', 1);
-					
-					callback(null, result);
-				}
-			});
 		});
+	});
 
-		req.on('error', function(e) {
-		  console.log('problem with request: ' + e.message);
-  
-		  callback(e, null);
-		});
+	req.on('error', function(e) {
+	  console.log('problem with request: ' + e.message);
 
-		req.write(body);
+	  callback(e, null);
+	});
 
-		req.end();
-	}
+	req.write(body);
+
+	req.end();
 }
 
 function _getAllInstitutions(callback) {
-	cad.getOAuthTokens('default', function(err, value) {
+	cad.getOAuthTokens(null, function(err, value) {
 		if (err) {
 			callback(err, null);
 		} else {
@@ -108,7 +106,7 @@ function _getAllInstitutions(callback) {
 }
 
 function _getInstitutionDetails(institutionId, callback) {
-	cad.getOAuthTokens('default', function(err, value) {
+	cad.getOAuthTokens(null, function(err, value) {
 		var oauthToken = value['oauth_token'];
 		var oauthTokenSecret = value['oauth_token_secret'];
 		
