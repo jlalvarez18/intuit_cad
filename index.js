@@ -12,8 +12,6 @@ var baseUrl = 'financialdatafeed.platform.intuit.com'
 
 function CAD() {}
 
-// NEED TO CHANGE THIS TO PASS A DICTIONARY TO INCLUDE
-// OAUTH KEYS AND PATH TO CERTIFICATES
 function _initialize(values) {
 	var oauthConsumerKey = values['consumer_key'];
 	var oauthSecretKey = values['secret_key'];
@@ -27,27 +25,21 @@ function _initialize(values) {
 	this._providerId = providerId;
 	this._certificatePath = certPath;
 	this._privateKeyPath = privPath;
-	
-	this._oauthToken = '';
-	this._oauthTokenSecret = '';
-	this._oauthExpirationDate = moment().subtract('day', 1);
 }
 
-function _getKeys() {
+function _getConsumerKeys() {
 	return 'Consumer: ' + cad._consumerKey + ' Secret: ' + cad._consumerSecretKey;
 }
 
 function _getOAuthTokens(customerId, callback) {
-	var now = moment();
-	
-	var expirationDate = cad._oauthExpirationDate || moment().subtract('day', 1);
-	
-	if (_areOAuthKeysExpired()) {
+	if (customerId == null) {
+		callback('Customer ID required', null)
+	} else {
 		var assertion = _prepSAMLAssertion(customerId, cad._providerId);
-	
+
 		var query = { saml_assertion: assertion };
 		var body = querystring.stringify(query);
-	
+
 		var options = {
 			host: 'oauth.intuit.com',
 			path: '/oauth/v1/get_access_token_by_saml',
@@ -58,161 +50,164 @@ function _getOAuthTokens(customerId, callback) {
 				'Content-Length': body.length
 			}
 		};
-	
+
 		var req = https.request(options, function(res) {
 			// console.log('STATUS: ' + res.statusCode);
 			// console.log('HEADERS: ' + JSON.stringify(res.headers));
-		
+	
 			var str = '';
-		
+	
 			res.on('data', function(chunk) {
 				str += chunk;
 			});
-		
+	
 			res.on('end', function() {
 				var cleanString = querystring.unescape(str);
-			
+		
 				var result = querystring.parse(str);
-			
+		
 				var oauth_problem = result['oauth_problem'];
-			
+		
 				if (oauth_problem != null) {
 					callback(oauth_problem, null);
 				} else {
-					cad._oauthToken = result['oauth_token'];
-					cad._oauthTokenSecret = result['oauth_token_secret'];
-					cad._oauthExpirationDate = moment().add('hours', 1);
-				
+					result['oauth_exp_date'] = moment().add('hours', 1);
+					
 					callback(null, result);
 				}
 			});
 		});
-	
+
 		req.on('error', function(e) {
 		  console.log('problem with request: ' + e.message);
-	  
+  
 		  callback(e, null);
 		});
-	
+
 		req.write(body);
-	
+
 		req.end();
-	} else {
-		var result = {
-			oauth_token: cad._oauthToken,
-			oauth_token_secret: cad._oauthTokenSecret
-		}
-		
-		callback(null, result);
 	}
 }
 
 function _getAllInstitutions(callback) {
-	var path = '/v1/institutions';
+	cad.getOAuthTokens('default', function(err, value) {
+		if (err) {
+			callback(err, null);
+		} else {
+			var oauthToken = value['oauth_token'];
+			var oauthTokenSecret = value['oauth_token_secret'];
+			
+			var path = '/v1/institutions';
 	
-	var timeout = 5*60*1000;
-	
-	_getRequest(path, callback, timeout);
+			var timeout = 5*60*1000;
+			
+			_getRequest(path, oauthToken, oauthTokenSecret, callback, timeout);
+		}
+	});
 }
 
-// Get details for the Institution ID
-// callback signature function(error, response) {}
-
 function _getInstitutionDetails(institutionId, callback) {
-	var path = '/v1/institutions/' + institutionId;
+	cad.getOAuthTokens('default', function(err, value) {
+		var oauthToken = value['oauth_token'];
+		var oauthTokenSecret = value['oauth_token_secret'];
+		
+		var path = '/v1/institutions/' + institutionId;
 	
-	_getRequest(path, callback);
+		_getRequest(path, oauthToken, oauthTokenSecret, callback);
+	});
 }
 
 var cad = module.exports = exports = new CAD();
 
 CAD.prototype.initialize = _initialize;
-CAD.prototype.getKeys = _getKeys;
+CAD.prototype.getConsumerKeys = _getConsumerKeys;
 CAD.prototype.getOAuthTokens = _getOAuthTokens;
 CAD.prototype.getAllInstitutions = _getAllInstitutions;
 CAD.prototype.getInstitutionDetails = _getInstitutionDetails;
 
 ////// Private Functions //////
 
-// Get details for the Institution ID
-// callback signature function(error, response, body) {}
-
-function _getRequest(path, callback, timeout) {
-	var oauth = OAuth({
-		consumer: {
-			public: cad._consumerKey,
-			secret: cad._consumerSecretKey
-		}
-	});
-	
-	var url = 'https://' + baseUrl + path;
-	
-	var requestData = {
-	    url: url,
-	    method: 'GET'
-	};
-	
-	var token = {
-	    public: cad._oauthToken,
-	    secret: cad._oauthTokenSecret
-	};
-	
-	var authHeader = oauth.toHeader(oauth.authorize(requestData, token));
-	
-	var headers = {
-		Accept: 'application/json',
-		Authorization: authHeader['Authorization']
-	};
-	
-	var requestOptions = {
-		host: baseUrl,
-		path: path,
-		method: requestData.method,
-		headers: headers
-	};
-	
-	timeout = timeout || 0;
-	
-	console.log('Timeout:' + timeout);
-	
-	var req = https.request(requestOptions, function(res) {
-		console.log('RESPONSE STATUS: ' + res.statusCode);
-		console.log('RESPONSE HEADERS: ' + JSON.stringify(res.headers));
-		
-		var str = '';
-	
-		res.on('data', function(chunk) {
-			str += chunk;
+function _getRequest(path, oauth_token, oauth_secret, callback, timeout) {
+	if (!path || !oauth_token || !oauth_secret) {
+		callback('_getRequest requires path, oauth_token and oauth_secret', null);
+	} else {
+		var oauth = OAuth({
+			consumer: {
+				public: cad._consumerKey,
+				secret: cad._consumerSecretKey
+			}
 		});
 	
-		res.on('end', function() {
-			var result = JSON.parse(str);
-		
-			callback(null, result);
-		});
-	});
+		var url = 'https://' + baseUrl + path;
 	
-	// req.setTimeout(timeout, function(argument) {
-	// 	var error = JSON.parse({error: 'Request timed out'});
-	// 	
-	// 	callback(error, null);
-	// });
+		var requestData = {
+		    url: url,
+		    method: 'GET'
+		};
+	
+		var token = {
+		    public: oauth_token,
+		    secret: oauth_secret
+		};
+	
+		var authHeader = oauth.toHeader(oauth.authorize(requestData, token));
+	
+		var headers = {
+			Accept: 'application/json',
+			Authorization: authHeader['Authorization']
+		};
+	
+		var requestOptions = {
+			host: baseUrl,
+			path: path,
+			method: requestData.method,
+			headers: headers
+		};
+	
+		timeout = timeout || 0;
+	
+		console.log('Timeout:' + timeout);
+	
+		var req = https.request(requestOptions, function(res) {
+			console.log('RESPONSE STATUS: ' + res.statusCode);
+			console.log('RESPONSE HEADERS: ' + JSON.stringify(res.headers));
 		
-	req.on('error', function(e) {
-	  console.log('problem with request: ' + e.message);
+			var str = '';
+	
+			res.on('data', function(chunk) {
+				str += chunk;
+			});
+	
+			res.on('end', function() {
+				var result = JSON.parse(str);
+		
+				callback(null, result);
+			});
+		});
+	
+		// req.setTimeout(timeout, function(argument) {
+		// 	var error = JSON.parse({error: 'Request timed out'});
+		// 	
+		// 	callback(error, null);
+		// });
+		
+		req.on('error', function(e) {
+		  console.log('problem with request: ' + e.message);
 	  
-	  var error = JSON.parse({error: e});
+		  var error = JSON.parse({error: e});
 		  
-	  callback(error, null);
-	});
+		  callback(error, null);
+		});
 		
-	req.end();
+		req.end();
+	}
 }
 
-function _areOAuthKeysExpired() {
+function _areOAuthKeysExpired(date) {
 	var now = moment();
 	
-	var expirationDate = cad._oauthExpirationDate || moment().subtract('day', 1);
+	var expirationDate = date || moment().subtract('day', 1);
 	
 	if (now.isAfter(expirationDate)) {
 		return true;
@@ -221,16 +216,14 @@ function _areOAuthKeysExpired() {
 	return false;
 }
 
-function _prepSAMLAssertion(customerId, providerId) {
-	var dateFormat = "YYYY-MM-DD'T'HH:mm:ss.SSS'Z'";
-	
+function _prepSAMLAssertion(customerId, providerId) {	
 	var xmlPath = path.join(__dirname, 'saml_xml');
 	
 	var now = moment.utc();
-	var nowString = now.toISOString()//.format(dateFormat);
+	var nowString = now.toISOString();
 	
 	var now15Min = now.add('m', 15);
-	var now15MinString = now15Min.toISOString()//.format(dateFormat);
+	var now15MinString = now15Min.toISOString();
 	
 	var refId = UUID.v1();
 	var x509 = fs.readFileSync(cad._certificatePath, 'utf8');
