@@ -106,14 +106,22 @@ function _getAllInstitutions(callback) {
 }
 
 function _getInstitutionDetails(institutionId, callback) {
-	cad.getOAuthTokens(null, function(err, value) {
-		var oauthToken = value['oauth_token'];
-		var oauthTokenSecret = value['oauth_token_secret'];
+	if (!institutionId) {
+		callback('Institution ID required', null);
+	} else {
+		cad.getOAuthTokens(null, function(err, value) {
+			if (err) {
+				callback(err, null);
+			} else {
+				var oauthToken = value['oauth_token'];
+				var oauthTokenSecret = value['oauth_token_secret'];
 		
-		var path = '/v1/institutions/' + institutionId;
+				var path = '/v1/institutions/' + institutionId;
 	
-		_getRequest(path, oauthToken, oauthTokenSecret, callback);
-	});
+				_getRequest(path, oauthToken, oauthTokenSecret, callback);
+			}
+		});
+	}
 }
 
 var cad = module.exports = exports = new CAD();
@@ -185,17 +193,13 @@ function _getRequest(path, oauth_token, oauth_secret, callback, timeout) {
 		});
 	
 		// req.setTimeout(timeout, function(argument) {
-		// 	var error = JSON.parse({error: 'Request timed out'});
-		// 	
-		// 	callback(error, null);
+		// 	callback('Request timed out', null);
 		// });
 		
 		req.on('error', function(e) {
 		  console.log('problem with request: ' + e.message);
 	  
-		  var error = JSON.parse({error: e});
-		  
-		  callback(error, null);
+		  callback(e.message, null);
 		});
 		
 		req.end();
