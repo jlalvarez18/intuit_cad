@@ -192,9 +192,9 @@ function _getRequest(path, oauth_token, oauth_secret, callback, timeout) {
 			});
 		});
 	
-		// req.setTimeout(timeout, function(argument) {
-		// 	callback('Request timed out', null);
-		// });
+		req.setTimeout(timeout, function(argument) {
+			callback('Request timed out', null);
+		});
 		
 		req.on('error', function(e) {
 		  console.log('problem with request: ' + e.message);
@@ -206,16 +206,18 @@ function _getRequest(path, oauth_token, oauth_secret, callback, timeout) {
 	}
 }
 
-function _areOAuthKeysExpired(date) {
-	var now = moment();
+function _areOAuthKeysExpired(dateString) {
+	var expirationDate = moment(dateString);
 	
-	var expirationDate = date || moment().subtract('day', 1);
+	if (expirationDate.isValid()) {
+		var now = moment();
 	
-	if (now.isAfter(expirationDate)) {
-		return true;
+		if (now.isBefore(expirationDate)) {
+			return false;
+		}
 	}
 	
-	return false;
+	return true;
 }
 
 function _prepSAMLAssertion(customerId, providerId) {	
